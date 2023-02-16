@@ -1,0 +1,1 @@
+upx --ultra-brute --no-lzma ffmpeg.exe
