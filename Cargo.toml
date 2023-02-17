@@ -2,9 +2,12 @@
 name = "Circle-Bounce-rs"
 version = "0.1.0"
 edition = "2021"
+authors = ["DarkLord76865"]
+description = "A CLI app to generate a video of bouncing circles"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 tinydraw = "0.1.1"
 tempfile = "3.3.0"
+clap = {version = "4.1.6", features = ["cargo"]}
