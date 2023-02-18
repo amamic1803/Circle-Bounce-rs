@@ -1,12 +1,17 @@
 #![allow(non_snake_case)]
 
-use tempfile::tempdir;
+use std::f64::consts::PI;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+
+use clap::{Arg, ArgAction, ArgMatches, command, value_parser};
+use rand::{Rng, thread_rng};
+use rand::rngs::ThreadRng;
+use rand::seq::SliceRandom;
+use tempfile::tempdir;
 use tinydraw::ImageRGB8;
-use clap::{command, value_parser, Arg, ArgAction, ArgMatches};
 
 
 #[allow(clippy::needless_range_loop)]
@@ -80,7 +85,7 @@ fn main() {
             .help("The background color of the video (HEX)")
             .required(false)
             .value_parser(hex_to_rgb)
-            .default_value("#FFFFFF"))
+            .default_value("#ffffff"))
         .arg(Arg::new("ball_color")
             .short('c')
             .long("ball_color")
@@ -150,68 +155,143 @@ fn main() {
 fn setup_simulation(cli_arguments: ArgMatches, ffmpeg_path: &str) {
     let destination_file = cli_arguments.get_one::<PathBuf>("destination_file").unwrap().to_str().unwrap();
     let video_length = *cli_arguments.get_one::<u128>("video_length").unwrap();
+    if video_length == 0 {
+        println!("Video length must be greater than 0");
+        return;
+    }
     let fps = *cli_arguments.get_one::<u128>("fps").unwrap();
+    if fps == 0 {
+        println!("FPS must be greater than 0");
+        return;
+    }
     let width = *cli_arguments.get_one::<u128>("width").unwrap();
+    if width == 0 {
+        println!("Width must be greater than 0");
+        return;
+    }
     let height = *cli_arguments.get_one::<u128>("height").unwrap();
+    if height == 0 {
+        println!("Height must be greater than 0");
+        return;
+    }
     let num_of_balls = *cli_arguments.get_one::<u128>("num_of_balls").unwrap();
-    let background_color = hex_to_rgb(cli_arguments.get_one::<&str>("background_color").unwrap()).unwrap();
-    let ball_color = hex_to_rgb(cli_arguments.get_one::<&str>("ball_color").unwrap()).unwrap();
-    let ball_color_random = cli_arguments.contains_id("ball_color_random");
-    let ball_radius_min = *cli_arguments.get_one::<u128>("ball_radius_min").unwrap();
-    let ball_radius_max = *cli_arguments.get_one::<u128>("ball_radius_max").unwrap();
-    let ball_speed_min = *cli_arguments.get_one::<u128>("ball_speed_min").unwrap();
-    let ball_speed_max = *cli_arguments.get_one::<u128>("ball_speed_max").unwrap();
-    let ball_mass = *cli_arguments.get_one::<&str>("ball_mass").unwrap();
+    if num_of_balls == 0 {
+        println!("Number of balls must be greater than 0");
+        return;
+    }
+    let background_color: [u8; 3] = *cli_arguments.get_one::<[u8; 3]>("background_color").unwrap();
+    let ball_color: [u8; 3] = *cli_arguments.get_one::<[u8; 3]>("ball_color").unwrap();
+    let ball_color_random: bool = cli_arguments.contains_id("ball_color_random");
+    let ball_radius_min: f64 = *cli_arguments.get_one::<u128>("ball_radius_min").unwrap() as f64;
+    let ball_radius_max: f64 = *cli_arguments.get_one::<u128>("ball_radius_max").unwrap() as f64;
+    if ball_radius_max < ball_radius_min {
+        println!("Maximum radius must be greater than or equal to minimum radius");
+        return;
+    } else if ball_radius_max == 0.0 {
+        println!("Maximum radius must be greater than 0");
+        return;
+    }
+    let ball_speed_min: f64 = *cli_arguments.get_one::<u128>("ball_speed_min").unwrap() as f64;
+    let ball_speed_max: f64 = *cli_arguments.get_one::<u128>("ball_speed_max").unwrap() as f64;
+    if ball_speed_max < ball_speed_min {
+        println!("Maximum speed must be greater than or equal to minimum speed");
+        return;
+    } else if ball_speed_max == 0.0 {
+        println!("Maximum speed must be greater than 0");
+        return;
+    }
+    let ball_mass = cli_arguments.get_one::<String>("ball_mass").unwrap().as_str();
 
-    let mut balls = Vec::new();
-    let mut rng = rand::thread_rng();
-
+    let mut balls: Vec<Ball> = vec![];
+    let mut rng: ThreadRng = thread_rng();
     for _ in 0..num_of_balls {
-        let radius = rng.gen_range(ball_radius_min..ball_radius_max);
-        let speed = rng.gen_range(ball_speed_min..ball_speed_max);
-        let angle = rng.gen_range(0.0..360.0);
-        let x = rng.gen_range(radius..width - radius);
-        let y = rng.gen_range(radius..height - radius);
-        let color = if ball_color_random {
-            let r = rng.gen_range(0..255);
-            let g = rng.gen_range(0..255);
-            let b = rng.gen_range(0..255);
-            format!("#{:02X}{:02X}{:02X}", r, g, b)
-        } else {
-            ball_color.to_string()
-        };
+        // radius
+        let radius = rng.gen_range((ball_radius_min as u128)..=(ball_radius_max as u128)) as f64;
+
+        // x, y
+        let mut tries = 0;
+        let mut x: f64;
+        let mut y: f64;
+        'outer: loop {
+            tries += 1;
+            if tries > 10_000 {
+                println!("Can't fit all balls in the given area");
+                return;
+            }
+            x = rng.gen_range(radius..(width as f64 - radius - 1.0));
+            y = rng.gen_range(radius..(height as f64 - radius - 1.0));
+
+            for ball in &balls {
+                if ((x - ball.x).abs() <= (radius + ball.r)) && ((y - ball.y).abs() <= (radius + ball.r)) {
+                    continue 'outer;
+                }
+            }
+            break;
+        }
+
+        // mass
         let mass = match ball_mass {
-            "circle" => radius * radius,
-            "ball" => radius * radius * radius,
+            "circle" => radius * radius * PI,
+            "ball" => (radius * radius * radius * PI * 4.0) / 3.0,
             _ => panic!("Invalid ball mass type"),
         };
-        balls.push(Ball::new(x, y, radius, speed, angle, color, mass));
+
+        // speed (vx, vy)
+        let speed_x: f64 = (*[-1, 1].choose(&mut rng).unwrap() as f64) * rng.gen_range(ball_speed_min..=ball_speed_max);
+        let speed_y: f64 = (*[-1, 1].choose(&mut rng).unwrap() as f64) * rng.gen_range(ball_speed_min..=ball_speed_max);
+
+        // color
+        let color: [u8; 3] = if ball_color_random {
+            let mut color_temp: [u8; 3] = [rng.gen_range(0..=255), rng.gen_range(0..=255), rng.gen_range(0..=255)];
+            while color_temp == background_color {
+                color_temp = [rng.gen_range(0..=255), rng.gen_range(0..=255), rng.gen_range(0..=255)];
+            }
+            color_temp
+        } else {
+            ball_color
+        };
+
+        balls.push(Ball::new(x, y, mass, radius, speed_x, speed_y, color));
     }
 
+    drop(rng);
     run_simulation(ffmpeg_path, destination_file, video_length, fps, width, height, background_color, balls);
 }
 
-fn run_simulation(ffmpeg_path: &str) {
+#[allow(clippy::too_many_arguments)]
+fn run_simulation(ffmpeg_path: &str, destination_file: &str, video_length: u128, fps: u128, width: u128, height: u128, background_color: [u8; 3], balls: Vec<Ball>) {
     let mut ffmpeg_encoder = Command::new(ffmpeg_path)
         .arg("-y") // overwrite file if it already exists
         .arg("-f").arg("rawvideo") // interpret the information from stdin as "raw video"
         .arg("-pix_fmt").arg("rgb24") // every three bytes are [r, g, b] pixel
-        .arg("-s").arg("1920x1080") // the size of the video
-        .arg("-r").arg("60") // the fps of the video
+        .arg("-s").arg(format!("{}x{}", width, height)) // the size of the video
+        .arg("-r").arg(fps.to_string()) // the fps of the video
         .arg("-an") // don't use audio
         .arg("-i").arg("-") // get data from stdin
         .arg("-c:v").arg("libx264") // encode to h264
         .arg("-crf").arg("0") // variable video bitrate
-        .arg("test.mp4") // output file
+        .arg(destination_file) // output file
         .stdin(Stdio::piped()).stderr(Stdio::piped()).stdout(Stdio::piped()) // stdin, stderr, and stdout are piped
         .spawn().unwrap(); // Run the child command
-
     let stdin = ffmpeg_encoder.stdin.as_mut().unwrap();
 
-    let mut image: ImageRGB8 = ImageRGB8::new(1920, 1080, [255, 255, 255]);
-    for _ in 0..10000 {
-        image.clear();
-        image.draw_circle(500, 500, 100, [0, 0, 0], 0, 1.0);
+    let width = width as f64;
+    let height = height as f64;
+    let interval = 1.0 / (fps as f64);
+
+    let mut image: ImageRGB8 = ImageRGB8::new(width as usize, height as usize, background_color);
+    for _ in 0..(fps * video_length) {
+
+
+
+
+
+
+
+
+
+
+        generate_frame(&balls, &mut image);
         stdin.write_all(image.to_bytes()).unwrap();
     }
 
@@ -220,12 +300,100 @@ fn run_simulation(ffmpeg_path: &str) {
     println!("{}", String::from_utf8(output.stderr).unwrap());
 }
 
+fn move_balls(balls: &mut Vec<Ball>, interval: f64) {
+    for ball in balls {
+        ball.x += ball.v_x * interval;
+        ball.y += ball.v_y * interval;
+    }
+}
+
+fn calculate_collision(balls: &mut [Ball], ball1: usize, ball2: usize) -> Option<f64> {
+    // write position of balls as functions of time (x + vx*t, y + vy*t)
+	// write distance of 2 balls with those functions
+	// square to get rid of square root
+	// find minimum value of that distance^2 function, and if it is smaller than d^2, find solutions for that function, take the one that happens sooner
+
+    let d_pow2 = (balls[ball1].r + balls[ball2].r).powi(2); // distance between balls at collision squared (d^2)
+    let delta_x = balls[ball1].x - balls[ball2].x; // x1 - x2
+	let delta_y = balls[ball1].y - balls[ball2].y; // y1 - y2
+	let delta_vx = balls[ball1].v_x - balls[ball2].v_x; // vx1 - vx2
+	let delta_vy = balls[ball1].v_y - balls[ball2].v_y; // vy1 - vy2
+
+    // calculate coefficients of distance^2 function
+	let a = delta_vx.powi(2) + delta_vy.powi(2); // first coefficient
+    if a != 0.0 { // if a is 0, then function is not quadratic, balls aren't moving, therefore, there is no collision
+        let b_divis_2 = (delta_x * delta_vx) + (delta_y * delta_vy);  // second coefficient divided by 2 (it simplifies function when in that form)
+        let c = delta_x.powi(2) + delta_y.powi(2);  // third coefficient
+
+        if (c - (b_divis_2.powi(2) / a)) < d_pow2 { // if minimum value of distance^2 function is smaller than d^2, then the balls would collide
+            // find solutions for function, when it's value is d^2
+            let discriminant_sqrt = (b_divis_2.powi(2) - (a * (c - d_pow2))).sqrt();
+            let mut sol_1: Option<f64> = Some((- b_divis_2 - discriminant_sqrt) / a);
+            let mut sol_2: Option<f64> = Some((- b_divis_2 + discriminant_sqrt) / a);
+            if sol_1.unwrap() < 0.0 {
+                sol_1 = None;
+            }
+            if sol_2.unwrap() < 0.0 {
+                sol_2 = None;
+            }
+
+            if sol_1.is_some() {
+                return if sol_2.is_some() {
+                    Some(sol_1.unwrap().min(sol_2.unwrap()))
+                } else {
+                    sol_1
+                }
+            } else if sol_2.is_some() && sol_1.is_none() {
+                    return sol_2;
+            }
+        }
+    }
+    None
+}
+
+fn calculate_wall_collision(balls: &mut [Ball], ball: usize, wall: usize, width: f64, height: f64) -> Option<f64> {
+    // end position minus start position divided by speed
+    let result: f64 = match wall {
+        0 => (balls[ball].r - balls[ball].x) / balls[ball].v_x, // left
+        1 => (width - balls[ball].r - balls[ball].x) / balls[ball].v_x, // right
+        2 => (balls[ball].r - balls[ball].y) / balls[ball].v_y, // bottom
+        3 => (height - balls[ball].r - balls[ball].y) / balls[ball].v_y, // top
+        _ => panic!("Invalid wall"),
+    };
+    if result > 0.0 {
+        Some(result)
+    } else {
+        None
+    }
+}
+
+fn generate_frame(balls: &[Ball], img: &mut ImageRGB8) {
+    img.clear();
+    for ball in balls {
+        img.draw_circle((ball.x).round() as usize, (ball.y).round() as usize, (ball.r).round() as usize, ball.color, 0, 1.0);
+    }
+}
+
 struct Ball {
-    x: u128,
-    y: u128,
-    m: u128,
-    r: u128,
-    v_x: u128,
-    v_y: u128,
+    x: f64,
+    y: f64,
+    m: f64,
+    r: f64,
+    v_x: f64,
+    v_y: f64,
     color: [u8; 3]
+}
+
+impl Ball {
+    fn new(x: f64, y: f64, mass: f64, radius: f64, velocity_x: f64, velocity_y: f64, color: [u8; 3]) -> Self {
+        Self {
+            x,
+            y,
+            m: mass,
+            r: radius,
+            v_x: velocity_x,
+            v_y: velocity_y,
+            color
+        }
+    }
 }
