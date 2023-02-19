@@ -4,8 +4,8 @@ A CLI app to generate a video of bouncing circles
 (with continuous collision detection) written in Rust.
 
 ![screenshot](https://user-images.githubusercontent.com/40371578/219967105-4b5ff45c-2bdd-43aa-82a7-6e323da2b0f2.png)
-Example: https://www.youtube.com/watch?v=ui5OTEb7xIs
-```bash
+Example: https://www.youtube.com/watch?v=QAcA30Pp8-g
+```
 circle-bounce-rs.exe video.mp4 -n 500 -r 10 -R 15 -C -l 3600
 ```
 
@@ -14,7 +14,7 @@ circle-bounce-rs.exe video.mp4 -n 500 -r 10 -R 15 -C -l 3600
 2. add other optional arguments
 3. for list of other arguments run `*.exe --help`
 
-```bash
+```
 >circle-bounce-rs.exe --help
 A CLI app to generate a video of bouncing circles
 
