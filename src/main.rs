@@ -5,8 +5,10 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::time::Instant;
 
 use clap::{Arg, ArgAction, ArgMatches, command, value_parser};
+use indicatif::ProgressBar;
 use rand::{Rng, thread_rng};
 use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
@@ -260,6 +262,9 @@ fn setup_simulation(cli_arguments: ArgMatches, ffmpeg_path: &str) {
 
 #[allow(clippy::too_many_arguments)]
 fn run_simulation(ffmpeg_path: &str, destination_file: &str, video_length: u128, fps: u128, width: u128, height: u128, background_color: [u8; 3], mut balls: Vec<Ball>) {
+    let start_time = Instant::now();
+    let pb = ProgressBar::new((video_length * fps) as u64);
+
     let mut ffmpeg_encoder = Command::new(ffmpeg_path)
         .arg("-y") // overwrite file if it already exists
         .arg("-f").arg("rawvideo") // interpret the information from stdin as "raw video"
@@ -413,11 +418,15 @@ fn run_simulation(ffmpeg_path: &str, destination_file: &str, video_length: u128,
 
         generate_frame(&balls, &mut image);
         stdin.write_all(image.to_bytes()).unwrap();
+        pb.inc(1);
     }
 
-    let output = ffmpeg_encoder.wait_with_output().unwrap();
-    println!("{}", String::from_utf8(output.stdout).unwrap());
-    println!("{}", String::from_utf8(output.stderr).unwrap());
+    let _output = ffmpeg_encoder.wait_with_output().unwrap();
+    let elapsed_time = start_time.elapsed().as_millis();
+    pb.finish();
+    println!("Finished encoding in {}.{} s", elapsed_time / 1000, elapsed_time % 1000);
+    // println!("{:?}", String::from_utf8(output.stderr).unwrap());
+    // println!("{:?}", String::from_utf8(output.stdout).unwrap());
 }
 
 fn move_balls(balls: &mut Vec<Ball>, interval: f64) {

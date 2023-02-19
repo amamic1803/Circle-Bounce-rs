@@ -9,10 +9,12 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = {version = "4.1.6", features = ["cargo"]}
+indicatif = "0.17.3"
+rand = "0.8.5"
 tinydraw = "0.1.1"
 tempfile = "3.3.0"
-clap = {version = "4.1.6", features = ["cargo"]}
-rand = "0.8.5"
+
 
 [build-dependencies]
 winres = "0.1.12"
