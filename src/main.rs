@@ -216,7 +216,7 @@ fn setup_simulation(cli_arguments: ArgMatches, ffmpeg_path: &str) {
         let mut y: f64;
         'outer: loop {
             tries += 1;
-            if tries > 10_000 {
+            if tries > 100_000 {
                 println!("Can't fit all balls in the given area");
                 return;
             }
@@ -276,7 +276,7 @@ fn run_simulation(ffmpeg_path: &str, destination_file: &str, video_length: u128,
         .arg("-c:v").arg("libx264") // encode to h264
         .arg("-crf").arg("0") // variable video bitrate
         .arg(destination_file) // output file
-        .stdin(Stdio::piped()).stderr(Stdio::piped()).stdout(Stdio::piped()) // stdin, stderr, and stdout are piped
+        .stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()) // set stdin to be piped
         .spawn().unwrap(); // Run the child command
     let stdin = ffmpeg_encoder.stdin.as_mut().unwrap();
 
@@ -425,8 +425,6 @@ fn run_simulation(ffmpeg_path: &str, destination_file: &str, video_length: u128,
     let elapsed_time = start_time.elapsed().as_millis();
     pb.finish();
     println!("Finished encoding in {}.{} s", elapsed_time / 1000, elapsed_time % 1000);
-    // println!("{:?}", String::from_utf8(output.stderr).unwrap());
-    // println!("{:?}", String::from_utf8(output.stdout).unwrap());
 }
 
 fn move_balls(balls: &mut Vec<Ball>, interval: f64) {
