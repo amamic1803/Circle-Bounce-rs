@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["DarkLord76865"]
 description = "A CLI app to generate a video of bouncing circles"
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -12,3 +13,6 @@ tinydraw = "0.1.1"
 tempfile = "3.3.0"
 clap = {version = "4.1.6", features = ["cargo"]}
 rand = "0.8.5"
+
+[build-dependencies]
+winres = "0.1.12"
