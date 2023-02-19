@@ -1,6 +1,6 @@
 [package]
 name = "Circle-Bounce-rs"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["DarkLord76865"]
 description = "A CLI app to generate a video of bouncing circles"
